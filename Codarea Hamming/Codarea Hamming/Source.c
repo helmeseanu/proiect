@@ -2,39 +2,159 @@
 #include "resource.h"
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 #define ID_FILE_EXIT 9001
 #define ID_FILE_DIALOG 9003
+#define ID_FILE_DIALOG1 9004
 #define ID_STUFF_GO 9002
 
 const char g_szClassName[] = "myWindowClass";
 
+typedef struct date
+{
+	int vectorbinar[32];
+	int *vectorhamming;
+	int nrbiti;
+}date;
+
+int trsfbin(int val,int *v)
+{
+	int i=1;
+	while (val)
+	{
+		v[i] = val % 2;
+		val = val / 2;
+		i++;
+	}
+	return i-1;
+}
+
+void CodareSimplaHamming(date caracter)//codare in care se tripleaza fiecare bit(detectie si corectie de erori unare)
+{
+	int i,count,j=1;
+	for (i = 1; i <= caracter.nrbiti; i++)
+	{
+		count = 3;
+		while (count)
+		{
+			caracter.vectorhamming[j] = caracter.vectorbinar[i];
+			j++;
+			count--;
+		}
+	}
+}
+
+void generareerori(date caracter)
+{
+	int ok,pozitieerr,i,okerr;
+	ok = rand() % 2;
+	if (ok == 1)
+	{
+		for (i = 1; i <= caracter.nrbiti * 3; i += 3)
+		{
+			okerr = rand() % 2;//se stabileste daca pe bitul respectiv se genereaza sau nu o eroare
+			if (okerr == 1)
+			{
+				pozitieerr = rand() % 3;//se stabileste 
+				if (caracter.vectorhamming[i + pozitieerr] == 0) caracter.vectorhamming[i + pozitieerr] = 1;//bit 0 devine bit 1(eroare)
+				else caracter.vectorhamming[i + pozitieerr] = 0; //bit 1 devine bit 0(eroare)
+			}
+		}
+	}
+}
+
+char detecterr(date caracter)
+{
+	int i,s,put=1,ASCII=0,j;
+	for (i = 1; i <= caracter.nrbiti * 3; i += 3)
+	{
+		s = 0;
+		for (j = 0; j <= 2; j++)
+		{
+			s += caracter.vectorhamming[i + j];
+		}
+		if (s != 0 && s != 3) return 'E';
+		else
+		{
+			if (s==3) ASCII +=put;
+		}
+		put = put * 2;
+	}
+	return (char)ASCII;
+}
+
+char corectieerori(date caracter)
+{
+	int i, s, put = 1, ASCII = 0, j;
+	for (i = 1; i <= caracter.nrbiti * 3; i += 3)
+	{
+		s = 0;
+		for (j = 0; j <= 2; j++)
+		{
+			s += caracter.vectorhamming[i + j];
+		}
+		if (s == 2 || s == 3)
+		{
+			ASCII += put;
+		}
+		put = put * 2;
+	}
+	return (char)ASCII;
+}
+
 BOOL CALLBACK AboutDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
-	//HBRUSH g_hbrBackground = CreateSolidBrush(RGB(0, 0, 0));
 	switch (Message)
 	{
-	/*case WM_CTLCOLORDLG:
-		return (LONG)g_hbrBackground;
-	case WM_CTLCOLORSTATIC:
-	{
-		HDC hdcStatic = (HDC)wParam;
-		SetTextColor(hdcStatic, RGB(255, 255, 255));
-		SetBkMode(hdcStatic, TRANSPARENT);
-		return (LONG)g_hbrBackground;
-	}
-	break;*/
 	case WM_INITDIALOG:
 	{
-		int nr = rand() % 100;
-		SetDlgItemInt(hwnd, IDC_SHOWCOUNT, nr, FALSE);
-		SetDlgItemInt(hwnd, IDC_SHIFT, nr>>1, FALSE);
-		break;
+		return TRUE;
 	}
 	case WM_COMMAND: switch (LOWORD(wParam))
 	{
-	case IDOK:{ EndDialog(hwnd, IDOK); break; }
-	case IDCANCEL: {EndDialog(hwnd, IDCANCEL); break; }
+		case IDCANCEL: {EndDialog(hwnd, IDCANCEL); break; }
+		case IDC_BUTTON1:
+		{
+		    int len = GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT));
+			char *sir,*sirerori,*sircorectat/*,*biti=NULL*/;
+			if(len==0)MessageBox(hwnd, "Nu ai introdus nimic!", "Atentionare", MB_OK);
+			else
+			{
+				sir = (char *)malloc(len + 1);
+				sirerori = (char *)malloc(len + 1);
+				sircorectat = (char *)malloc(len + 1);
+				GetDlgItemText(hwnd, IDC_TEXT, sir, len + 1);
+				int i;
+				date *mesaj;
+				mesaj = (date *)malloc(len*sizeof(date));
+				for (i = 0; i < len; i++)
+				{
+					mesaj[i].nrbiti = trsfbin((int)sir[i],mesaj[i].vectorbinar);//codul ASCII al fiecarui caracter este transformat binar
+					mesaj[i].vectorhamming = (int*)malloc(3*mesaj[i].nrbiti*sizeof(int));//este alocata memorie pentru vectorul hamming
+					CodareSimplaHamming(mesaj[i]);//se genereaza vectorul hamming(vector in care fiecare bit este triplat)
+					generareerori(mesaj[i]);//sunt generate erori in vectorul hamming(simularea canalului cu zgomot)
+					////////
+					/*biti = (char *)malloc(1+(mesaj[i].nrbiti * 3));
+					int k;
+					for (k = 1; k <= mesaj[i].nrbiti * 3; k++)
+					{
+						if (mesaj[i].vectorhamming[k] == 1) biti[k - 1] = '1';
+						else  biti[k - 1] = '0';
+					}
+					biti[mesaj[i].nrbiti * 3-3] = 0;*/
+					////////
+					sirerori[i] = detecterr(mesaj[i]);
+					sircorectat[i] = corectieerori(mesaj[i]);
+					//SetDlgItemInt(hwnd, IDC_TEXT2, mesaj[i].nrbiti, TRUE);
+				}
+				sirerori[len] = 0;
+				sircorectat[len] = 0;
+				SetDlgItemText(hwnd, IDC_TEXT2, sirerori);
+				SetDlgItemText(hwnd, IDC_TEXT3, sircorectat);
+			}
+			break;
+		}
 	}
 	break;
 	default: return FALSE;
@@ -56,15 +176,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case ID_FILE_DIALOG:
 		{
 			int ret = DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_DIALOG1), hwnd, AboutDlgProc);
-			/*if (ret == IDOK)
-			{
-				MessageBox(hwnd, "Dialog exited with IDOK.", "Notice", MB_OK | MB_ICONINFORMATION);
-		    }
-			else if (ret == IDCANCEL)
-			{
-				MessageBox(hwnd, "Dialog exited with IDCANCEL.", "Notice", MB_OK | MB_ICONINFORMATION);
-			}
-			else*/ if (ret == -1)
+			if (ret == -1)
 			{
 				MessageBox(hwnd, "Dialog failed!", "Error", MB_OK | MB_ICONINFORMATION);
 			}
@@ -78,9 +190,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		HICON hIcon, hIconSm;
 		hMenu = CreateMenu();
 		hSubMenu = CreatePopupMenu();
-		AppendMenu(hSubMenu, MF_STRING, ID_FILE_DIALOG, "&Dialog");
-		AppendMenu(hSubMenu, MF_STRING, ID_FILE_EXIT, "E&xit");//submeniul exit atasat meniului File
-		AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenu, "&File");
+		AppendMenu(hSubMenu, MF_STRING, ID_FILE_DIALOG, "&Erori singulare");
+		AppendMenu(hSubMenu, MF_STRING, ID_FILE_DIALOG1, "&Hamming (7,4)");
+		AppendMenu(hSubMenu, MF_STRING, ID_FILE_EXIT, "E&xit");
+		AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenu, "&Codari");
 		hSubMenu = CreatePopupMenu();
 		AppendMenu(hSubMenu, MF_STRING, ID_STUFF_GO, "&Go");
 		AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenu, "&Stuff");
@@ -101,9 +214,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	srand((unsigned int)time(NULL));
-	//int nr = rand() % 100;///
-
-
 	WNDCLASSEX wc;
 	HWND hwnd;
 	MSG Msg;
@@ -130,7 +240,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		MessageBox(NULL, "Window Creation Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK);
 		return 0;
 	}
-	ShowWindow(hwnd, nCmdShow);
+	//ShowWindow(hwnd, nCmdShow);
 	UpdateWindow(hwnd);
 	while (GetMessage(&Msg, NULL, 0, 0) > 0)
 	{
